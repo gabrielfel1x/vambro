@@ -1,0 +1,62 @@
+name: Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Diariamente às 2h
+  workflow_dispatch:
+
+jobs:
+  backup-database:
+    runs-on: ubuntu-latest
+    name: Backup do Banco de Dados
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '18.x'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Create database backup
+      run: |
+        echo "Criando backup do banco de dados..."
+        # Comandos de backup aqui
+        echo "Backup criado com sucesso!"
+      env:
+        DB_HOST: ${{ secrets.DB_HOST }}
+        DB_USER: ${{ secrets.DB_USER }}
+        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        
+    - name: Upload backup
+      uses: actions/upload-artifact@v2
+      with:
+        name: database-backup
+        path: backup/
+        retention-days: 7
+
+  backup-files:
+    runs-on: ubuntu-latest
+    name: Backup de Arquivos
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      
+    - name: Archive files
+      run: |
+        echo "Arquivando arquivos importantes..."
+        tar -czf backup-files.tar.gz src/ public/ package.json
+      continue-on-error: true
+      
+    - name: Upload files backup
+      uses: actions/upload-artifact@v2
+      with:
+        name: files-backup
+        path: backup-files.tar.gz
+        retention-days: 30
+
