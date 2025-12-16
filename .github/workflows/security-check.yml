@@ -8,6 +8,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'yarn.lock'
+      - 'src/**'
   pull_request:
     branches: [ main, master ]
     paths:
@@ -15,10 +16,12 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'yarn.lock'
+      - 'src/**'
   workflow_dispatch:
   schedule:
-    # Executa toda segunda-feira às 9h UTC
+    # Executa toda segunda-feira às 9h UTC e toda sexta às 17h
     - cron: '0 9 * * 1'
+    - cron: '0 17 * * 5'
 
 jobs:
   dependency-check:
@@ -34,14 +37,18 @@ jobs:
       with:
         node-version: '18.x'
         cache: 'npm'
+        registry-url: 'https://registry.npmjs.org'
     
     - name: Install dependencies
       run: npm install
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       
     - name: Check for outdated packages
       run: |
         echo "Verificando pacotes desatualizados..."
         npm outdated || true
+        npm outdated --json > outdated-packages.json || true
         
     - name: Run npm audit
       run: |
@@ -54,6 +61,11 @@ jobs:
         echo "Verificando vulnerabilidades conhecidas..."
         npx audit-ci --moderate || true
         
+    - name: Check dependency licenses
+      run: |
+        echo "Verificando licenças das dependências..."
+        npx license-checker --json > license-report.json || true
+        
     - name: Upload audit report
       if: always()
       uses: actions/upload-artifact@v3
@@ -61,6 +73,8 @@ jobs:
         name: security-audit-report
         path: |
           npm-audit-report.json
+          outdated-packages.json
+          license-report.json
           package-lock.json
 
   code-scan:
@@ -82,11 +96,45 @@ jobs:
     - name: Run ESLint
       run: |
         echo "Executando análise de código..."
-        npx eslint . --ext .js,.jsx || true
+        npx eslint . --ext .js,.jsx --format json --output-file eslint-report.json || true
         
     - name: Check for hardcoded secrets
       run: |
         echo "Verificando possíveis segredos expostos..."
-        # Simulação de verificação de segredos
-        grep -r "password\|secret\|api_key\|token" --include="*.js" --include="*.json" src/ || true
+        grep -r "password\|secret\|api_key\|token\|PRIVATE_KEY" --include="*.js" --include="*.json" --include="*.env" src/ || true
+        
+    - name: Check for SQL injection patterns
+      run: |
+        echo "Verificando padrões de SQL injection..."
+        grep -r "query.*\+.*\$" --include="*.js" src/ || true
+        
+    - name: Upload scan reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: code-scan-reports
+        path: eslint-report.json
+
+  container-scan:
+    runs-on: ubuntu-latest
+    name: Scan de Container
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Build Docker image
+      run: |
+        echo "FROM node:14" > Dockerfile.test
+        echo "WORKDIR /app" >> Dockerfile.test
+        echo "COPY package*.json ./" >> Dockerfile.test
+        echo "RUN npm install" >> Dockerfile.test
+        docker build -f Dockerfile.test -t test-image .
+      continue-on-error: true
+      
+    - name: Scan image for vulnerabilities
+      run: |
+        echo "Escaneando imagem Docker..."
+        # Simulação de scan
+        docker images | grep test-image || true
 

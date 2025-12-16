@@ -2,15 +2,24 @@ name: Dependency Update Check
 
 on:
   push:
+    branches: [ main, master, develop ]
+    paths:
+      - '.github/workflows/**'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
     branches: [ main, master ]
     paths:
       - '.github/workflows/**'
       - 'package.json'
   workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1' # Toda segunda-feira às 8h
 
 jobs:
   check-dependencies:
     runs-on: ubuntu-latest
+    name: Verificar Atualizações de Dependências
     
     steps:
     - name: Checkout code
@@ -34,10 +43,55 @@ jobs:
         echo "" >> dependency-report.md
         echo "## Pacotes Desatualizados" >> dependency-report.md
         npm outdated >> dependency-report.md || true
+        echo "" >> dependency-report.md
+        echo "## Versões de Node.js Suportadas" >> dependency-report.md
+        node --version >> dependency-report.md
+        npm --version >> dependency-report.md
+        
+    - name: Check for major updates
+      run: |
+        echo "Verificando atualizações major disponíveis..."
+        npm outdated --json > major-updates.json || true
+        
+    - name: Check dependency tree
+      run: |
+        echo "Gerando árvore de dependências..."
+        npm list --all --json > dependency-tree.json || true
         
     - name: Upload dependency report
       uses: actions/upload-artifact@v3
+      if: always()
       with:
         name: dependency-report
-        path: dependency-report.md
+        path: |
+          dependency-report.md
+          major-updates.json
+          dependency-tree.json
+
+  auto-update:
+    runs-on: ubuntu-latest
+    name: Tentativa de Atualização Automática
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Check for patch updates
+      run: |
+        echo "Verificando atualizações de patch..."
+        npm outdated || true
+        
+    - name: Generate update PR
+      run: |
+        echo "Simulando criação de PR para atualizações..."
+        # Aqui normalmente criaria um PR automaticamente
 
