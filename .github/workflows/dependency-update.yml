@@ -1,0 +1,43 @@
+name: Dependency Update Check
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '.github/workflows/**'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  check-dependencies:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Generate dependency report
+      run: |
+        echo "# Relatório de Dependências" > dependency-report.md
+        echo "" >> dependency-report.md
+        echo "## Pacotes Instalados" >> dependency-report.md
+        npm list --depth=0 >> dependency-report.md || true
+        echo "" >> dependency-report.md
+        echo "## Pacotes Desatualizados" >> dependency-report.md
+        npm outdated >> dependency-report.md || true
+        
+    - name: Upload dependency report
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-report
+        path: dependency-report.md
+
